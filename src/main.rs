@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use ggez::glam::Vec2;
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::graphics::{self, Color, Image, ImageFormat, Rect};
 use ggez::event::{self, EventHandler};
-use image::imageops;
+use image::{imageops, open};
 use rfd::FileDialog;
 use image::{io::Reader as ImageReader, DynamicImage, ImageResult, RgbImage};
 
@@ -15,22 +17,31 @@ struct MainState {
 }
 
 // buttons x, y coordinates
-const LOAD_IMG_BUTTON: (f32, f32) = (200.0, 360.0);
-const ENCRYPT_BUTTON: (f32, f32) = (540.0, 360.0);
+const LOAD_IMG_BUTTON: (f32, f32) = (175.0, 350.0);
+const ENCRYPT_BUTTON: (f32, f32) = (510.0, 350.0);
 
 impl MainState {
     fn new() -> GameResult<MainState> {
         // code is not safe, run-time error is possible
-        // must select an image
-        let path = FileDialog::new()
-                                    .set_title("Select Image")
-                                    .pick_file().unwrap();
+        let path = get_path_from_file_system("Select Image");
                                 
-        let s = path
+        let s = path 
         .to_str()
         .unwrap();
-
-        let img = ImageReader::open(s);
+    
+        let iamge_state = Self::get_image_state(s);
+        
+        Ok(iamge_state)
+    }
+    //this function take the new state of the new image 
+    // and make the Main state equla to this new state
+    fn change_state(&mut self , new_state : MainState  ){
+        *self = new_state;
+    }
+    // This function processes the image that is obtained from the file system
+    //then create a new state of this processed image and return this state
+    fn get_image_state(path : &str)->MainState{
+        let img: Result<ImageReader<std::io::BufReader<std::fs::File>>, std::io::Error> = ImageReader::open(path);
 
         let i1 = img.unwrap().decode().unwrap();
 
@@ -39,15 +50,15 @@ impl MainState {
         let enc = i1.clone();
 
         let resized_enc = enc.resize(200, 200, image::imageops::FilterType::Gaussian);
-
-        let s = MainState { 
+        
+        let image_state = MainState { 
             image: i1,
             resized_img: resized,
             enc_img: enc,
             resized_enc: resized_enc,
             is_enc: false,
         };
-        Ok(s)
+        return  image_state;
     }
 }
 
@@ -56,32 +67,36 @@ impl event::EventHandler<ggez::GameError> for MainState {
         Ok(())
     }
 
+    // Draw the Screen and set its Color and draw its elements
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let mut canvas = graphics::Canvas::from_frame(
             ctx,
             graphics::Color::from([0.1, 0.2, 0.3, 1.0]),
         );
 
-        // buttons and text
+        // text on the button used to load image
         let load_img_text = graphics::Text::new("load image");
-
+        // text on the button used to Encrypt image
         let enc_text = graphics::Text::new("encrypt");
-
-        let button = graphics::Mesh::new_rectangle(
+        
+        // create Load button and set its properties
+        let load_button = graphics::Mesh::new_rectangle(
             ctx, 
             graphics::DrawMode::fill(), 
-            Rect::new(LOAD_IMG_BUTTON.0, LOAD_IMG_BUTTON.1, 40.0, 15.0), 
-            Color::WHITE,
+            //define button x, y coordinates in x ,y plane and also define its width and height
+            Rect::new(LOAD_IMG_BUTTON.0, LOAD_IMG_BUTTON.1, 100.0, 25.0), 
+            Color::RED,
         )?;
-
+        // create Encrypt button and set its properties
         let enc_button = graphics::Mesh::new_rectangle(
             ctx, 
             graphics::DrawMode::fill(), 
-            Rect::new(ENCRYPT_BUTTON.0,ENCRYPT_BUTTON.1, 40.0, 15.0), 
-            Color::WHITE,
+            //define button x, y coordinates in x ,y plane and also define its width and height
+            Rect::new(ENCRYPT_BUTTON.0,ENCRYPT_BUTTON.1, 100.0, 25.0), 
+            Color::RED,
         )?;
 
-        // encrypt image
+        // encrypt image : (show the image on the screen after Encryption)
         if self.is_enc{
             let enced = self.resized_enc.to_rgba8();
             let (width, height) = (enced.width(), enced.height());
@@ -90,8 +105,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             ImageFormat::Rgba8UnormSrgb,
             width,
             height,);
-
-            canvas.draw(&img, Vec2::new(460.0, 120.0));
+            canvas.draw(&img, Vec2::new(460.0,120.0));
         }
 
         // from dynamic image to Image
@@ -103,16 +117,17 @@ impl event::EventHandler<ggez::GameError> for MainState {
         width,
         height,);
 
-        // draw on screen
+                            // draw on screen
+        //draw the image
         canvas.draw(&img, Vec2::new(120.0, 120.0));
-
-        canvas.draw(&button, Vec2::new(0.0, 0.0));
-
-        canvas.draw(&load_img_text, Vec2::new(LOAD_IMG_BUTTON.0 - 20.0, LOAD_IMG_BUTTON.1 + 20.0));
-
+        //draw the buuton to load image
+        canvas.draw(&load_button, Vec2::new(0.0, 0.0));
+        // draw the text on the Load _button
+        canvas.draw(&load_img_text, Vec2::new(LOAD_IMG_BUTTON.0+5.0 , LOAD_IMG_BUTTON.1+5.0 ));
+        //draw the buuton to Encrypt image
         canvas.draw(&enc_button, Vec2::new(0.0, 0.0));
-
-        canvas.draw(&enc_text, Vec2::new(ENCRYPT_BUTTON.0 - 10.0, ENCRYPT_BUTTON.1 + 20.0));
+        // draw the text on the Enc _button
+        canvas.draw(&enc_text, Vec2::new(ENCRYPT_BUTTON.0 + 20.0, ENCRYPT_BUTTON.1 + 5.0));
 
         canvas.finish(ctx)?;
         Ok(())
@@ -123,45 +138,28 @@ impl event::EventHandler<ggez::GameError> for MainState {
             _ctx: &mut Context,
             _button: event::MouseButton,
             _x: f32,
-            _y: f32,
+            _y: f32,   // x ,y is coordinates of clicking the mouse
         ) -> Result<(), ggez::GameError> {
         
-        // load image
-        if _x >= LOAD_IMG_BUTTON.0 && _x <= LOAD_IMG_BUTTON.0 + 40.0{
-            if _y >= LOAD_IMG_BUTTON.1 && _y <= LOAD_IMG_BUTTON.1 + 15.0{
-                let path = FileDialog::new()
-                                    .set_title("Select Image")
-                                    .pick_file().unwrap();
-                                
+        // if the coordinates of clicking the mouse is inside the border of the load_image button
+        // so we will load the image
+        if _x >= LOAD_IMG_BUTTON.0 && _x <= LOAD_IMG_BUTTON.0 + 100.0{
+            if _y >= LOAD_IMG_BUTTON.1 && _y <= LOAD_IMG_BUTTON.1 + 25.0{
+                
+                let path = get_path_from_file_system("Select Image");
+                        
                 let s = path
                 .to_str()
                 .unwrap();
-
-                let img = ImageReader::open(s);
-
-                let i1 = img.unwrap().decode().unwrap();
-
-                self.image = i1.clone();
-
-                let resized = self.image.resize(200, 200, image::imageops::FilterType::Gaussian);
-
-                let enc = i1;
-
-                let resized_enc = enc.resize(200, 200, image::imageops::FilterType::Gaussian);
-
-                self.enc_img = enc;
-
-                self.resized_enc = resized_enc;
-
-                self.resized_img = resized;
-
-                self.is_enc = false;
+                
+                let new_image_state = Self::get_image_state(s);
+                self.change_state(new_image_state);
             } 
         }
 
-        // encrypt
-        if _x >= ENCRYPT_BUTTON.0 && _x <= ENCRYPT_BUTTON.0 + 40.0{
-            if _y >= ENCRYPT_BUTTON.1 && _y <= ENCRYPT_BUTTON.1 + 15.0{
+        // encrypt : (this function is responsbile for Encryption Process)
+        if _x >= ENCRYPT_BUTTON.0 && _x <= ENCRYPT_BUTTON.0 + 100.0{
+            if _y >= ENCRYPT_BUTTON.1 && _y <= ENCRYPT_BUTTON.1 + 25.0{
                 self.is_enc = true;
 
                 // TODO: image encryption
@@ -175,9 +173,16 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
         Ok(())
     }
-
     
 }
+// this function open the file system to enanle us choosing the image that we want
+// and  then return teh path of this image
+fn get_path_from_file_system(title : &str)->PathBuf{
+    FileDialog::new()
+    .set_title(title)
+    .pick_file().unwrap()
+}
+
 
 pub fn main() -> GameResult {
     let cb = ggez::ContextBuilder::new("super_simple", "ggez");
