@@ -1,6 +1,7 @@
 use std::path::PathBuf;
+mod enc_dec;
 
-use ggez::glam::Vec2;
+use ggez::glam::{vec2, Vec2};
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::graphics::{self, Color, Image, ImageFormat, Rect};
 use ggez::event::{self, EventHandler};
@@ -14,6 +15,7 @@ struct MainState {
     enc_img: DynamicImage,
     resized_enc: DynamicImage,
     is_enc: bool,
+    rgb_keys: Vec<Vec<char>>,
 }
 
 // buttons x, y coordinates
@@ -57,6 +59,7 @@ impl MainState {
             enc_img: enc,
             resized_enc: resized_enc,
             is_enc: false,
+            rgb_keys: vec![Vec::new(), Vec::new(), Vec::new()]
         };
         return  image_state;
     }
