@@ -1,16 +1,17 @@
+use ggez::graphics::Image;
+use image::{DynamicImage, GenericImageView};
+
 use crate::MainState;
 
+const KEY_SIZE: usize = 8;
 
-//static mut RGB_KEYS: Vec<Vec<char>> = vec![Vec::new(), Vec::new(), Vec::new()];
-static KEY_SIZE: usize = 8;
-
-pub fn key_generation(tap_position : usize, seed : &mut Vec<char>, keys: &mut Vec<Vec<char>>){
+pub fn key_generation(tap_position : usize, seed : &mut Vec<char>, rgb_keys: &mut Vec<Vec<char>>){
    
     let bit_size : usize = seed.len();
     
-    for k in 0 .. keys.len(){   
+    for k in 0 .. rgb_keys.len(){   
         
-        let mut key_string: Vec<char> = Vec::with_capacity(KEY_SIZE);
+        let mut key_string: Vec<char> = vec![' '; KEY_SIZE];
 
         for i in 0 .. KEY_SIZE{            
             let shift_out : char = seed[0];
@@ -24,16 +25,36 @@ pub fn key_generation(tap_position : usize, seed : &mut Vec<char>, keys: &mut Ve
             key_string[i] = res;
         }
 
-        keys[k] = key_string; 
+        rgb_keys[k] = key_string; 
     }
 } 
 
-pub fn lfsr(image_matrix : MainState, tap_position : usize, init_seed : &mut str, width: i32, height: i32){
-    let seed : Vec<char> = init_seed.chars().collect();
+pub fn lfsr(image_matrix : &mut MainState, rgb_keys : &mut Vec<Vec<char>>, tap_position : usize, init_seed : String, width: u32, height: u32) -> DynamicImage{
+    let mut seed : Vec<char> = init_seed.chars().collect();
 
-    for row in 0 .. height{
-        for col in 0 .. width{
-            
-        }
+
+    for (row, col, mut pixel) in image_matrix.image.pixels(){
+
+        key_generation(tap_position, &mut seed, rgb_keys);
+
+        let red_key = &mut rgb_keys[0];
+        pixel[0] = (pixel[0] ^ convert_byte(red_key)) as u8;
+
+        let green_key = &mut rgb_keys[1];
+        pixel[1] = (pixel[1] ^ convert_byte(green_key)) as u8;
+
+        let blue_key = &mut rgb_keys[2];
+        pixel[2] = (pixel[2] ^ convert_byte(blue_key)) as u8;
     }
+
+    image_matrix.image.clone()
+
+}
+
+fn convert_byte(key : &mut Vec<char>) -> u8{
+    let mut res = 0;
+    for i in 0 .. key.len(){
+        res = ((res << 1) | (key[i] as u8)) as u8;
+    }
+    res
 }

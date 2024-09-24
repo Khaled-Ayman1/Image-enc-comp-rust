@@ -15,7 +15,6 @@ struct MainState {
     enc_img: DynamicImage,
     resized_enc: DynamicImage,
     is_enc: bool,
-    rgb_keys: Vec<Vec<char>>,
 }
 
 // buttons x, y coordinates
@@ -59,7 +58,6 @@ impl MainState {
             enc_img: enc,
             resized_enc: resized_enc,
             is_enc: false,
-            rgb_keys: vec![Vec::new(), Vec::new(), Vec::new()]
         };
         return  image_state;
     }
@@ -167,7 +165,13 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
                 // TODO: image encryption
                 // remove following line
-                self.resized_enc = self.enc_img.grayscale().resize(200, 200, imageops::FilterType::Gaussian);
+                let width = self.image.width();
+                let height = self.image.height();
+                let dimensions = width * height;
+                let mut rgb_keys: Vec<Vec<char>> = vec![vec![' '; dimensions as usize], vec![' '; dimensions as usize], vec![' '; dimensions as usize]];
+                //self.resized_enc = self.enc_img.grayscale().resize(200, 200, imageops::FilterType::Gaussian);                
+                self.resized_enc = enc_dec::lfsr(self, &mut rgb_keys, 4, String::from("01110111101")
+                , width, height);
             }
         }
 
