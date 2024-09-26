@@ -29,26 +29,27 @@ pub fn key_generation(tap_position : usize, seed : &mut Vec<char>, rgb_keys: &mu
     }
 } 
 
-pub fn lfsr(image_matrix : &mut MainState, rgb_keys : &mut Vec<Vec<char>>, tap_position : usize, init_seed : String, width: u32, height: u32) -> DynamicImage{
+pub fn lfsr(image_matrix : &mut MainState, rgb_keys : &mut Vec<Vec<char>>, tap_position : usize, init_seed : String, width: u32, height: u32){
+    
     let mut seed : Vec<char> = init_seed.chars().collect();
+    let image_bytes = image_matrix.enc_img.as_mut_rgb8().unwrap();
 
+    for row in 0 .. height{
+        for col in 0 .. width{
 
-    for (row, col, mut pixel) in image_matrix.image.pixels(){
-
-        key_generation(tap_position, &mut seed, rgb_keys);
-
-        let red_key = &mut rgb_keys[0];
-        pixel[0] = (pixel[0] ^ convert_byte(red_key)) as u8;
-
-        let green_key = &mut rgb_keys[1];
-        pixel[1] = (pixel[1] ^ convert_byte(green_key)) as u8;
-
-        let blue_key = &mut rgb_keys[2];
-        pixel[2] = (pixel[2] ^ convert_byte(blue_key)) as u8;
+            let pixel = &mut image_bytes[(col, row)].0;
+            key_generation(tap_position, &mut seed, rgb_keys);
+            
+            let red_key = &mut rgb_keys[0];
+            pixel[0] ^= convert_byte(red_key);
+    
+            let green_key = &mut rgb_keys[1];
+            pixel[1] ^= convert_byte(green_key);
+    
+            let blue_key = &mut rgb_keys[2];
+            pixel[2] ^= convert_byte(blue_key);
+        }
     }
-
-    image_matrix.image.clone()
-
 }
 
 fn convert_byte(key : &mut Vec<char>) -> u8{

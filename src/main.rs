@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 mod enc_dec;
+mod comp;
 
 use ggez::glam::{vec2, Vec2};
 use ggez::{Context, ContextBuilder, GameResult};
@@ -15,11 +17,15 @@ struct MainState {
     enc_img: DynamicImage,
     resized_enc: DynamicImage,
     is_enc: bool,
+    comp_img: DynamicImage,
+    resized_comp: DynamicImage,
+    is_comp: bool
 }
 
 // buttons x, y coordinates
 const LOAD_IMG_BUTTON: (f32, f32) = (175.0, 350.0);
 const ENCRYPT_BUTTON: (f32, f32) = (510.0, 350.0);
+const COMPRESS_BUTTON: (f32, f32) = (510.0, 100.0);
 
 impl MainState {
     fn new() -> GameResult<MainState> {
@@ -52,12 +58,19 @@ impl MainState {
 
         let resized_enc = enc.resize(200, 200, image::imageops::FilterType::Gaussian);
         
+        let comp = i1.clone();
+
+        let resized_comp = comp.resize(200, 200, image::imageops::FilterType::Gaussian);
+
         let image_state = MainState { 
             image: i1,
             resized_img: resized,
             enc_img: enc,
             resized_enc: resized_enc,
             is_enc: false,
+            comp_img: comp,
+            resized_comp: resized_comp,
+            is_comp: false
         };
         return  image_state;
     }
@@ -80,6 +93,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
         // text on the button used to Encrypt image
         let enc_text = graphics::Text::new("encrypt");
         
+        let comp_text = graphics::Text::new("compress");
+
         // create Load button and set its properties
         let load_button = graphics::Mesh::new_rectangle(
             ctx, 
@@ -97,12 +112,32 @@ impl event::EventHandler<ggez::GameError> for MainState {
             Color::RED,
         )?;
 
+        let comp_button = graphics::Mesh::new_rectangle(
+            ctx, 
+            graphics::DrawMode::fill(), 
+            //define button x, y coordinates in x ,y plane and also define its width and height
+            Rect::new(COMPRESS_BUTTON.0,COMPRESS_BUTTON.1, 100.0, 25.0), 
+            Color::RED,
+        )?;
+
+        
         // encrypt image : (show the image on the screen after Encryption)
         if self.is_enc{
             let enced = self.resized_enc.to_rgba8();
             let (width, height) = (enced.width(), enced.height());
 
             let img = Image::from_pixels(ctx, enced.as_ref(),
+            ImageFormat::Rgba8UnormSrgb,
+            width,
+            height,);
+            canvas.draw(&img, Vec2::new(460.0,120.0));
+        }
+
+        if self.is_comp{
+            let compd = self.resized_comp.to_rgb8();
+            let (width, height) = (compd.width(), compd.height());
+
+            let img = Image::from_pixels(ctx, &compd.as_ref(),
             ImageFormat::Rgba8UnormSrgb,
             width,
             height,);
@@ -129,6 +164,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
         canvas.draw(&enc_button, Vec2::new(0.0, 0.0));
         // draw the text on the Enc _button
         canvas.draw(&enc_text, Vec2::new(ENCRYPT_BUTTON.0 + 20.0, ENCRYPT_BUTTON.1 + 5.0));
+        
+        canvas.draw(&comp_button, Vec2::new(0.0, 0.0));
+        canvas.draw(&comp_text, Vec2::new(COMPRESS_BUTTON.0 + 20.0, COMPRESS_BUTTON.1 + 5.0));
 
         canvas.finish(ctx)?;
         Ok(())
@@ -169,14 +207,34 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 let height = self.image.height();
                 let dimensions = width * height;
                 let mut rgb_keys: Vec<Vec<char>> = vec![vec![' '; dimensions as usize], vec![' '; dimensions as usize], vec![' '; dimensions as usize]];
-                //self.resized_enc = self.enc_img.grayscale().resize(200, 200, imageops::FilterType::Gaussian);                
-                self.resized_enc = enc_dec::lfsr(self, &mut rgb_keys, 4, String::from("01110111101")
+
+                enc_dec::lfsr(self, &mut rgb_keys, 2, String::from("111100011")
                 , width, height);
+                self.resized_enc = self.enc_img.resize(200, 200, image::imageops::FilterType::Gaussian);
             }
         }
 
         // compression
         // TODO: compression & decompression
+        if _x >= COMPRESS_BUTTON.0 && _x <= COMPRESS_BUTTON.0 + 100.0{
+            if _y >= COMPRESS_BUTTON.1 && _y <= COMPRESS_BUTTON.1 + 25.0{
+                
+                self.is_comp = true;
+
+                let width = self.image.width();
+                let height = self.image.height();
+
+                let mut r: HashMap<u8, i32> = HashMap::new();
+                let mut g: HashMap<u8, i32> = HashMap::new();
+                let mut b: HashMap<u8, i32> = HashMap::new();
+
+                let mut r_tree: HashMap<u8, String> = HashMap::new();
+                let mut g_tree: HashMap<u8, String> = HashMap::new();
+                let mut b_tree: HashMap<u8, String> = HashMap::new();
+
+
+            }
+        }
 
         Ok(())
     }
