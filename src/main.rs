@@ -1,8 +1,10 @@
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::path::PathBuf;
 mod enc_dec;
 mod comp;
 
+use comp::{huffman_compress, write_compressed_image};
 use ggez::glam::{vec2, Vec2};
 use ggez::{Context, ContextBuilder, GameResult};
 use ggez::graphics::{self, Color, Image, ImageFormat, Rect};
@@ -17,8 +19,7 @@ struct MainState {
     enc_img: DynamicImage,
     resized_enc: DynamicImage,
     is_enc: bool,
-    comp_img: DynamicImage,
-    resized_comp: DynamicImage,
+    comp_img: Vec<String>,
     is_comp: bool
 }
 
@@ -58,9 +59,7 @@ impl MainState {
 
         let resized_enc = enc.resize(200, 200, image::imageops::FilterType::Gaussian);
         
-        let comp = i1.clone();
-
-        let resized_comp = comp.resize(200, 200, image::imageops::FilterType::Gaussian);
+        let comp: Vec<String> = Vec::new();
 
         let image_state = MainState { 
             image: i1,
@@ -69,7 +68,6 @@ impl MainState {
             resized_enc: resized_enc,
             is_enc: false,
             comp_img: comp,
-            resized_comp: resized_comp,
             is_comp: false
         };
         return  image_state;
@@ -134,7 +132,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
         }
 
         if self.is_comp{
-            let compd = self.resized_comp.to_rgb8();
+            let compd = self.resized_img.to_rgb8();
             let (width, height) = (compd.width(), compd.height());
 
             let img = Image::from_pixels(ctx, &compd.as_ref(),
@@ -224,15 +222,21 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 let width = self.image.width();
                 let height = self.image.height();
 
-                let mut r: HashMap<u8, i32> = HashMap::new();
-                let mut g: HashMap<u8, i32> = HashMap::new();
-                let mut b: HashMap<u8, i32> = HashMap::new();
+                let mut r: HashMap<i16, i32> = HashMap::new();
+                let mut g: HashMap<i16, i32> = HashMap::new();
+                let mut b: HashMap<i16, i32> = HashMap::new();
 
-                let mut r_tree: HashMap<u8, String> = HashMap::new();
-                let mut g_tree: HashMap<u8, String> = HashMap::new();
-                let mut b_tree: HashMap<u8, String> = HashMap::new();
+                let mut r_tree: HashMap<i16, String> = HashMap::new();
+                let mut g_tree: HashMap<i16, String> = HashMap::new();
+                let mut b_tree: HashMap<i16, String> = HashMap::new();
 
+                let tap: i32 = 2;
+                let init_seed: String = String::from("011101111100010101"); 
+                let file_name = String::from("comp_img.txt");
 
+                let (comp_rate, red_root, green_root, blue_root, comp_img) = huffman_compress(self.image.borrow_mut(), tap, init_seed.clone(), r, g, b, &mut r_tree, &mut g_tree, &mut b_tree, height, width);
+
+                let result = write_compressed_image(file_name, init_seed, tap, red_root, green_root, blue_root, width, height, comp_img);
             }
         }
 

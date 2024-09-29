@@ -1,10 +1,12 @@
-use std::{arch::x86_64::_SIDD_LEAST_SIGNIFICANT, collections::HashMap};
-use ggez::winit::dpi::validate_scale_factor;
+use std::vec;
+use std::collections::HashMap;
+use std::fs::File;
+use binary_rw::{self, BinaryWriter, Endian, FileStream};
 use image::DynamicImage;
 use priority_queue::PriorityQueue;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct Node<T>{
+pub struct Node<T>{
     value: T,
     freq: i32,
     binary: String,
@@ -23,8 +25,8 @@ impl<T> Node<T>{
     }
 }
 
-fn construct_dictionaries(image: &mut DynamicImage, r: &mut HashMap<u8, i32>, g: &mut HashMap<u8, i32>,
-    b: &mut HashMap<u8, i32>, height: u32, width: u32){
+fn construct_dictionaries(image: &mut DynamicImage, r: &mut HashMap<i16, i32>, g: &mut HashMap<i16, i32>,
+    b: &mut HashMap<i16, i32>, height: u32, width: u32){
     
     let image_buffer = image.as_mut_rgb8().unwrap();
 
@@ -32,44 +34,44 @@ fn construct_dictionaries(image: &mut DynamicImage, r: &mut HashMap<u8, i32>, g:
         for j in 0 .. width{
             let pixel = image_buffer[(j,i)];
 
-            if let Some(mut val) = r.get_mut(&pixel[0]){
+            if let Some(mut val) = r.get_mut(&(pixel[0] as i16)){
                 *val += 1;
             }
             else{
-                r.insert(pixel[0], 1);
+                r.insert(pixel[0] as i16, 1);
             }
 
-            if let Some(mut val) = g.get_mut(&pixel[1]){
+            if let Some(mut val) = g.get_mut(&(pixel[1] as i16)){
                 *val += 1;
             }
             else{
-                g.insert(pixel[1], 1);
+                g.insert(pixel[1] as i16, 1);
             }
 
-            if let Some(mut val) = b.get_mut(&pixel[2]){
+            if let Some(mut val) = b.get_mut(&(pixel[2] as i16)){
                 *val += 1;
             }
             else{
-                b.insert(pixel[2], 1);
+                b.insert(pixel[2] as i16, 1);
             }
         }
     }
 
 }
 
-fn build_huffman_tree(color: &mut HashMap<u8, i32>) -> Node<u8>{
+fn build_huffman_tree(color: &mut HashMap<i16, i32>) -> Node<i16>{
     
-    let mut pq: PriorityQueue<Node<u8>, i32> = PriorityQueue::new();
+    let mut pq: PriorityQueue<Node<i16>, i32> = PriorityQueue::new();
 
     for value in color.keys(){
         let freq = color.get(value).unwrap();
-        let node: Node<u8> = Node::new(*value, *freq);
+        let node: Node<i16> = Node::new(*value, *freq);
         pq.push(node, *freq);
     }
     for i in 0 .. color.len() - 1{
-        let mut node: Node<u8> = Node::new(255, 0);
-        let first_min: Node<u8> = pq.pop().unwrap().0;
-        let second_min: Node<u8> = pq.pop().unwrap().0;
+        let mut node: Node<i16> = Node::new(255, 0);
+        let first_min: Node<i16> = pq.pop().unwrap().0;
+        let second_min: Node<i16> = pq.pop().unwrap().0;
         node.freq = first_min.freq + second_min.freq;
         node.left = Some(Box::new(second_min));
         node.right = Some(Box::new(first_min));
@@ -80,8 +82,8 @@ fn build_huffman_tree(color: &mut HashMap<u8, i32>) -> Node<u8>{
     pq.pop().unwrap().0
 }
 
-fn dfs(node: &mut Node<u8>, binary: String, tree: &mut HashMap<u8, String>,
-    freq_tree: &mut HashMap<u8, i32>, channel_size: &mut f32){
+fn dfs(node: &mut Node<i16>, binary: String, tree: &mut HashMap<i16, String>,
+    freq_tree: &mut HashMap<i16, i32>, channel_size: &mut f32){
 
     if Some(&node).is_none(){
         return;
@@ -103,10 +105,10 @@ fn dfs(node: &mut Node<u8>, binary: String, tree: &mut HashMap<u8, String>,
     }
 }
 
-fn huffman_compress(mut image:DynamicImage, tap_position: i32, init_seed: String, mut r: HashMap<u8, i32>, mut g: HashMap<u8, i32>,
-    mut b: HashMap<u8, i32>, r_tree: &mut HashMap<u8, String>, g_tree: &mut HashMap<u8, String>, b_tree: &mut HashMap<u8, String>, height: u32, width:u32,) -> (f32, Node<u8>, Node<u8>, Node<u8>, Vec<String>){
+pub fn huffman_compress(image: &mut DynamicImage, tap_position: i32, init_seed: String, mut r: HashMap<i16, i32>, mut g: HashMap<i16, i32>,
+    mut b: HashMap<i16, i32>, r_tree: &mut HashMap<i16, String>, g_tree: &mut HashMap<i16, String>, b_tree: &mut HashMap<i16, String>, height: u32, width:u32,) -> (f32, Node<i16>, Node<i16>, Node<i16>, Vec<String>){
     
-    construct_dictionaries(&mut image, &mut r, &mut g, &mut b, height, width);
+    construct_dictionaries(image, &mut r, &mut g, &mut b, height, width);
 
     let mut root_red = build_huffman_tree(&mut r);
     let mut root_green = build_huffman_tree(&mut g);
@@ -137,8 +139,8 @@ fn huffman_compress(mut image:DynamicImage, tap_position: i32, init_seed: String
 
 }
 
-fn pixel_encoding(mut image: DynamicImage, height: u32, width: u32,r_tree: &mut HashMap<u8, String>,
-     g_tree: &mut HashMap<u8, String>, b_tree: &mut HashMap<u8, String>) -> Vec<String>{
+fn pixel_encoding(image: &mut DynamicImage, height: u32, width: u32,r_tree: &mut HashMap<i16, String>,
+     g_tree: &mut HashMap<i16, String>, b_tree: &mut HashMap<i16, String>) -> Vec<String>{
 
     let mut red_string = String::new();
     let mut green_string = String::new();
@@ -148,14 +150,112 @@ fn pixel_encoding(mut image: DynamicImage, height: u32, width: u32,r_tree: &mut 
 
     for i in 0 .. height{
         for j in 0 .. width{
-            let pixel = image_buffer[(width, height)];
+            let pixel = image_buffer[(j, i)];
 
-            red_string.push_str(r_tree.get(&pixel[0]).unwrap());
-            green_string.push_str(g_tree.get(&pixel[1]).unwrap());
-            blue_string.push_str(b_tree.get(&pixel[2]).unwrap());
+            red_string.push_str(r_tree.get(&(pixel[0] as i16)).unwrap());
+            green_string.push_str(g_tree.get(&(pixel[1] as i16)).unwrap());
+            blue_string.push_str(b_tree.get(&(pixel[2] as i16)).unwrap());
         }
     }
 
     let arrays = vec![red_string, green_string, blue_string];
     arrays
+}
+
+pub fn write_compressed_image(file_name: String, init_seed: String, tap_position: i32,
+    mut red_root: Node<i16>, mut green_root: Node<i16>, mut blue_root: Node<i16>, width: u32,
+    height: u32, rgb_channels: Vec<String>) -> Result<(), std::io::Error>{
+
+    let mut file = File::create(file_name)?;
+    let mut stream = FileStream::new(file);
+    let mut writer = BinaryWriter::new(&mut stream,Endian::Little);
+    
+    writer.write_i32(tap_position);
+    writer.write_string(init_seed);
+    writer.write_u32(width);
+    writer.write_u32(height);
+    
+    write_tree(&mut writer, &mut red_root);
+    print_tree(& mut red_root);
+
+    write_tree(&mut writer, &mut green_root);
+    print_tree(&mut green_root);
+
+    write_tree(&mut writer, &mut blue_root);
+    print_tree(&mut blue_root);
+
+    writer.write_usize(rgb_channels[0].len());
+    writer.write_usize(rgb_channels[1].len());
+    writer.write_usize(rgb_channels[2].len());
+
+    write_channels(writer, rgb_channels);
+    
+    Ok(())
+}
+
+
+fn write_tree(writer: &mut BinaryWriter, node: &mut Node<i16>){
+    if Some(&node).is_none(){
+        return;
+    }
+    if node.value == 255{
+        writer.write_i16(node.value);
+    }
+    else{
+        writer.write_i16(node.value);
+    }
+
+    if let Some(ref mut left_node) = node.left {
+        write_tree(writer, left_node);
+    }
+
+    // Check and recursively call `dfs` for the right child if it exists
+    if let Some(ref mut right_node) = node.right {
+        write_tree(writer, right_node);
+    }
+    
+    
+}
+
+fn write_channels(mut writer: BinaryWriter, channels: Vec<String>){
+
+    for channel in channels{
+        let bit_length: usize = channel.len();
+        let mut bytes: Vec<u8> = vec![0;(bit_length + 7) / 8];
+
+        for i in 0 .. bit_length{
+            if channel.chars().nth(i).unwrap() == '1'{
+                let byte_index = i / 8;
+                let bit_offset = i % 8;
+                bytes[byte_index] |= (1 << (7 - bit_offset)) as u8; 
+            }
+        }
+
+        writer.write_bytes(bytes);
+    }
+}
+
+fn print_tree(node: &mut Node<i16>){
+
+    if Some(&node).is_none(){
+        return;
+    }
+    if node.value == 255{
+        println!("node freq: {}", node.freq);
+    }
+    else{
+        println!("leaf node");
+        println!("node value: {}", node.value);
+        println!("node freq: {}", node.freq);
+        println!("end of leaf node");
+    }
+
+    if let Some(ref mut left_node) = node.left {
+        print_tree(left_node);
+    }
+
+    
+    if let Some(ref mut right_node) = node.right {
+        print_tree(right_node);
+    }
 }
